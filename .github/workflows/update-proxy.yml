@@ -58,8 +58,8 @@ jobs:
         run: |
           NEW_CONTENT=$(cat <<EOF
           [SmartProxy Servers]
-          ${{ steps.fetch_ips.outputs.ip1 }}:7890 [HTTP] [ip]
-          ${{ steps.fetch_ips.outputs.ip2 }}:7890 [HTTP] [ip2]
+          ${{ steps.fetch_ips.outputs.ip1 }}:7890 [HTTP] [MEIZU]
+          ${{ steps.fetch_ips.outputs.ip2 }}:7890 [HTTP] [ONEPLUS]
           EOF
           )
           echo "$NEW_CONTENT" > SmartProxy-Servers.txt.new
