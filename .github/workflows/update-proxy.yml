@@ -1,0 +1,99 @@
+name: Update SmartProxy Servers
+
+on:
+  schedule:
+    # 每30分钟运行一次（可根据需要调整）
+    - cron: '*/30 * * * *'
+  workflow_dispatch:   # 支持手动触发
+
+permissions:
+  contents: write      # 允许推送代码到仓库
+
+jobs:
+  update-proxy-list:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch IPs from WebDAV
+        id: fetch_ips
+        run: |
+          # WebDAV 认证信息（建议使用 Secrets，此处为示例直接填写）
+          WEBDAV=${{ secrets.WEBDAV_URL }}
+          USERNAME=${{ secrets.WEBDAV_USER }}
+          PASSWORD=${{ secrets.WEBDAV_PWD }}
+          
+          # 下载 ip.txt 并提取第一行作为 IP1
+          IP1=$(curl -s -u "${USERNAME}:${PASSWORD}" "${WEBDAV}/ip.txt" | head -n1 | tr -d '\r\n')
+          # 下载 ip2.txt 并提取第一行作为 IP2
+          IP2=$(curl -s -u "${USERNAME}:${PASSWORD}" "${WEBDAV}/ip2.txt" | head -n1 | tr -d '\r\n')
+          
+          # 简单的 IPv4 地址验证（可选）
+          validate_ip() {
+            local ip=$1
+            if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+              return 0
+            else
+              return 1
+            fi
+          }
+          
+          if ! validate_ip "$IP1"; then
+            echo "❌ 从 ip.txt 获取的 IP 无效: '$IP1'"
+            exit 1
+          fi
+          
+          if ! validate_ip "$IP2"; then
+            echo "❌ 从 ip2.txt 获取的 IP 无效: '$IP2'"
+            exit 1
+          fi
+          
+          echo "✅ 获取到 IP1: $IP1, IP2: $IP2"
+          echo "ip1=$IP1" >> $GITHUB_OUTPUT
+          echo "ip2=$IP2" >> $GITHUB_OUTPUT
+
+      - name: Generate new file content
+        id: generate
+        run: |
+          NEW_CONTENT=$(cat <<EOF
+          [SmartProxy Servers]
+          ${{ steps.fetch_ips.outputs.ip1 }}:7890 [HTTP] [ip]
+          ${{ steps.fetch_ips.outputs.ip2 }}:7890 [HTTP] [ip2]
+          EOF
+          )
+          echo "$NEW_CONTENT" > SmartProxy-Servers.txt.new
+          echo "✅ 新内容已生成"
+
+      - name: Check if file needs update
+        id: check
+        run: |
+          if [ -f "SmartProxy-Servers.txt" ]; then
+            if cmp -s "SmartProxy-Servers.txt" "SmartProxy-Servers.txt.new"; then
+              echo "unchanged=true" >> $GITHUB_OUTPUT
+              echo "📄 内容未发生变化，无需提交"
+            else
+              echo "unchanged=false" >> $GITHUB_OUTPUT
+              echo "🔄 检测到内容变化，准备提交"
+            fi
+          else
+            echo "unchanged=false" >> $GITHUB_OUTPUT
+            echo "🆕 文件不存在，将创建新文件"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check.outputs.unchanged == 'false'
+        run: |
+          # 替换原文件
+          mv SmartProxy-Servers.txt.new SmartProxy-Servers.txt
+          
+          # 配置 Git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 提交变更
+          git add SmartProxy-Servers.txt
+          git commit -m "Update SmartProxy servers [skip ci]"
+          git push
+          
+          echo "✅ 已提交并推送更新"
