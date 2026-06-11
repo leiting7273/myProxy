@@ -3,11 +3,15 @@ name: Update SmartProxy Servers
 on:
   schedule:
     # 每30分钟运行一次（可根据需要调整）
-    - cron: '*/30 * * * *'
+    - cron: '0,30 * * * *'
   workflow_dispatch:   # 支持手动触发
 
 permissions:
   contents: write      # 允许推送代码到仓库
+
+concurrency:
+  group: update-proxy
+  cancel-in-progress: false   # 让后续任务排队，而不是取消
 
 jobs:
   update-proxy-list:
